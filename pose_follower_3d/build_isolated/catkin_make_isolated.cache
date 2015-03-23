@@ -1,0 +1,2 @@
+
+-DCATKIN_DEVEL_PREFIX=/home/andreas/workspace/tidyup_hydro/src/full_body_nav/pose_follower_3d/devel_isolated -DCMAKE_INSTALL_PREFIX=/home/andreas/workspace/tidyup_hydro/src/full_body_nav/pose_follower_3d/install_isolated

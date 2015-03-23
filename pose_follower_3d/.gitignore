@@ -1,0 +1,8 @@
+bin/
+build/
+lib/
+srv_gen/
+msg_gen/
+/.*project
+/cmake_install.cmake
+*~
