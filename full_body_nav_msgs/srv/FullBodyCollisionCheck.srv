@@ -1,0 +1,5 @@
+moveit_msgs/RobotState[] robot_states
+
+---
+
+moveit_msgs/MoveItErrorCodes[] error_codes
