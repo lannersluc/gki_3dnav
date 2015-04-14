@@ -15,7 +15,7 @@ find_package(catkin REQUIRED COMPONENTS
 #  planning_models
 #  planning_environment
   moveit_msgs
-  sbpl_3dnav_planner
+#  sbpl_3dnav_planner
   full_body_nav_msgs
   visualization_msgs
 )
