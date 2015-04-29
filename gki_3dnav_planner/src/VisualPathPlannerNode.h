@@ -12,11 +12,11 @@
 #include <interactive_markers/interactive_marker_server.h>
 //#include "gki_3dnav_planner/CheckCollisions.h"
 //#include "gki_3dnav_planner/PlanPath.h"
-#include <moveit/planning_scene/planning_scene.h>
 #include <octomap_msgs/Octomap.h>
 #include <tf/transform_listener.h>
 #include <moveit/planning_scene_interface/planning_scene_interface.h>
 #include <moveit/planning_scene_monitor/planning_scene_monitor.h>
+#include <moveit/planning_scene/planning_scene.h>
 
 namespace gki_3dnav_planner
 {
@@ -38,6 +38,8 @@ private:
     boost::shared_ptr<tf::TransformListener> tf_listener;
 
     planning_scene_monitor::PlanningSceneMonitorPtr scene_monitor;
+    planning_scene::PlanningScenePtr scene;
+    ros::Publisher planning_scene_publisher;
 };
 
 } /* namespace gki_3dnav_planner */
