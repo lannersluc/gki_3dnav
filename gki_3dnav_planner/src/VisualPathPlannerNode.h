@@ -37,8 +37,8 @@ private:
     ros::Subscriber octomapSubscriber;
     boost::shared_ptr<tf::TransformListener> tf_listener;
 
-    planning_scene_monitor::PlanningSceneMonitorPtr scene_monitor;
     planning_scene::PlanningScenePtr scene;
+    planning_scene_monitor::PlanningSceneMonitorPtr scene_monitor;
     ros::Publisher planning_scene_publisher;
 };
 

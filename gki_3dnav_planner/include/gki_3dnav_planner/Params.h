@@ -8,15 +8,11 @@
 #ifndef PARAMS_H_
 #define PARAMS_H_
 
-#include "gki_3dnav_planner/OctomapServerConfig.h"
-
 namespace gki_3dnav_planner
 {
 
 namespace params
 {
-void updateParams(gki_3dnav_planner::OctomapServerConfig& config, uint32_t level);
-
 // robot attributes and skills
 extern double robotLength;
 extern double robotWidth;

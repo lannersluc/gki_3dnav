@@ -13,6 +13,7 @@ find_package(catkin REQUIRED COMPONENTS
   nav_msgs
   std_msgs
   std_srvs
+  #sbpl
   visualization_msgs
   interactive_markers
 )
@@ -95,7 +96,7 @@ link_directories(${SBPL_LIBRARY_DIRS})
 ## DEPENDS: system dependencies of this project that dependent projects also need
 catkin_package(
   INCLUDE_DIRS include
-  LIBRARIES gki_3dnav_planner
+  LIBRARIES gki_3dnav_planner 
   CATKIN_DEPENDS moveit_msgs nav_core nav_msgs sbpl std_msgs std_srvs visualization_msgs
   DEPENDS system_lib
 )
@@ -106,21 +107,24 @@ catkin_package(
 
 ## Specify additional locations of header files
 ## Your package locations should be listed before other locations
-# include_directories(include)
+include_directories(include)
 include_directories(
   ${catkin_INCLUDE_DIRS}
 )
+add_definitions(${EIGEN_DEFINITIONS})
 
 ## Declare a cpp library
-#add_library(${PROJECT_NAME} 
-#    src/PlanningEnvironmentCommon.cpp
-#    src/PlanningEnvironmentSimpleXY.cpp
-#    src/PlanningEnvironmentEDH.cpp
-#    src/PlanningEnvironmentMPH.cpp
-#    src/PlanningEnvironmentODSH.cpp
-#    src/Params.cpp
-#    src/sbpl_lattice_planner.cpp
-#)
+add_library(gki_3dnav_planner
+    #src/PlanningEnvironmentCommon.cpp
+    #src/PlanningEnvironmentSimpleXY.cpp
+    #src/PlanningEnvironmentEDH.cpp
+    #src/PlanningEnvironmentMPH.cpp
+    #src/PlanningEnvironmentODSH.cpp
+    #src/CollisionChecker.cpp
+    #src/Params.cpp
+    src/environment_xyt_3d_collisions.cpp
+    src/3dnav_planner.cpp
+)
 
 ## Declare a cpp executable
 add_executable(visual_path_planning_node src/VisualPathPlannerNode.cpp)
@@ -131,6 +135,11 @@ add_executable(visual_path_planning_node src/VisualPathPlannerNode.cpp)
 #add_dependencies(visual_path_planning_node full_body_nav_msgs_generate_messages_cpp)
 
 ## Specify libraries to link a library or executable target against
+target_link_libraries(gki_3dnav_planner
+	${catkin_LIBRARIES}
+	${SBPL_LIBRARIES} 
+	${Boost_LIBRARIES}
+)
 target_link_libraries(visual_path_planning_node
 	${catkin_LIBRARIES}
 	${Boost_LIBRARIES}

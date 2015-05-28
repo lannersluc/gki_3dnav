@@ -28,9 +28,14 @@ VisualPathPlannerNode::VisualPathPlannerNode()
     collisioinTestServer.reset( new interactive_markers::InteractiveMarkerServer("gki_3dnav_planner/visual_path_planner") );
 
     // setup planning scene
+	moveit_msgs::LoadMap load_map_srv;
+	load_map_srv.request.filename = ros::package::getPath("tidyup_demo_launch") + "/maps/octomap.bt";
+	ROS_INFO_STREAM("loading map: "<<load_map_srv.request.filename);
+	ros::service::call("/move_group/load_map", load_map_srv);
+	ROS_INFO_STREAM("result: "<<(load_map_srv.response.success? "success" : "failure" ));
     scene_monitor.reset(new planning_scene_monitor::PlanningSceneMonitor("robot_description"));
     //scene_monitor->startStateMonitor("/move_group/monitored_planning_scene");
-    //scene_monitor->startWorldGeometryMonitor();
+    scene_monitor->startWorldGeometryMonitor();
     //scene_monitor->startSceneMonitor();
     scene_monitor->requestPlanningSceneState("/get_planning_scene");
     scene = scene_monitor->getPlanningScene();
@@ -109,6 +114,7 @@ VisualPathPlannerNode::~VisualPathPlannerNode()
 
 void VisualPathPlannerNode::processFeedback(const visualization_msgs::InteractiveMarkerFeedbackConstPtr& feedback)
 {
+	moveit_msgs::LoadMap load_map_srv;
     collision_detection::CollisionRequest request;
     collision_detection::CollisionResult result;
     geometry_msgs::Pose robot_pose;
@@ -144,6 +150,10 @@ void VisualPathPlannerNode::processFeedback(const visualization_msgs::Interactiv
     switch (feedback->event_type)
     {
     case visualization_msgs::InteractiveMarkerFeedback::BUTTON_CLICK:
+    	load_map_srv.request.filename = ros::package::getPath("tidyup_demo_launch") + "/maps/octomap.bt";
+    	ROS_INFO_STREAM("loading map: "<<load_map_srv.request.filename);
+    	ros::service::call("/move_group/load_map", load_map_srv);
+    	ROS_INFO_STREAM("result: "<<(load_map_srv.response.success? "success" : "failure" ));
         //robot_state.printStateInfo(std::cout);
 //        robot_pose_eigen = planning_scene->getTransforms().getTransform("/base_footprint");
 //        tf::transformEigenToTF(robot_pose_eigen, robot_pose_tf);
