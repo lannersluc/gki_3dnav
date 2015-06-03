@@ -162,17 +162,28 @@ public:
      */
     virtual void PrintVars() { }
 
+    void update_planning_scene();
+    void publish_planning_scene();
+
 protected:
     //hash table of size x_size*y_size. Maps from coords to stateId
     int HashTableSize;
     std::vector<EnvNAVXYTHETALATHashEntry_t*>* Coord2StateIDHashTable;
     //vector that maps from stateID to coords
     std::vector<EnvNAVXYTHETALATHashEntry_t*> StateID2CoordTable;
+    enum CollisionState
+    {
+    	UNKNOWN,
+    	IN_COLLISION,
+    	NO_COLLISION
+    };
+    std::vector<CollisionState> stateIDs_in_collision;
 
     EnvNAVXYTHETALATHashEntry_t** Coord2StateIDHashTable_lookup;
 
     planning_scene::PlanningScenePtr scene;
     planning_scene_monitor::PlanningSceneMonitorPtr scene_monitor;
+    ros::Publisher planning_scene_publisher;
 
     virtual unsigned int GETHASHBIN(unsigned int X, unsigned int Y, unsigned int Theta);
 
@@ -188,8 +199,7 @@ protected:
     virtual void InitializeEnvironment();
 
     sbpl_xy_theta_pt_t discreteToContinuous(int x, int y, int theta);
-    bool is_in_collision(int X, int Y, int Theta);
-
+    bool is_in_collision(EnvNAVXYTHETALATHashEntry_t* state);
     virtual void PrintHashTableHist(FILE* fOut);
 };
 

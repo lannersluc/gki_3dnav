@@ -37,7 +37,7 @@
 #include <sbpl/utils/mdpconfig.h>
 
 using namespace std;
-
+//#define TIME_DEBUG 1
 #if TIME_DEBUG
 static clock_t time3_addallout = 0;
 static clock_t time_gethash = 0;
@@ -63,7 +63,6 @@ static unsigned int inthash(unsigned int key)
 	return key;
 }
 
-//-----------------XYTHETA Enivornment (child) class---------------------------
 Environment_xyt_3d_collisions::Environment_xyt_3d_collisions()
 {
 	HashTableSize = 0;
@@ -75,6 +74,8 @@ Environment_xyt_3d_collisions::Environment_xyt_3d_collisions()
 	//scene_monitor->startSceneMonitor();
 	scene_monitor->requestPlanningSceneState("/get_planning_scene");
 	scene = scene_monitor->getPlanningScene();
+	ros::NodeHandle nh("~");
+	planning_scene_publisher = nh.advertise<moveit_msgs::PlanningScene>("planning_scene", 1, true);
 }
 
 Environment_xyt_3d_collisions::~Environment_xyt_3d_collisions()
@@ -298,6 +299,10 @@ int Environment_xyt_3d_collisions::SetGoal(double x_m, double y_m, double theta_
 		//have to create a new entry
 		OutHashEntry = (this->*CreateNewHashEntry)(x, y, theta);
 	}
+	if (is_in_collision(OutHashEntry))
+	{
+		SBPL_ERROR("ERROR: goal state in collision\n", x, y);
+	}
 
 	//need to recompute start heuristics?
 	if (EnvNAVXYTHETALAT.goalstateid != OutHashEntry->stateID)
@@ -340,6 +345,10 @@ int Environment_xyt_3d_collisions::SetStart(double x_m, double y_m, double theta
 	{
 		//have to create a new entry
 		OutHashEntry = (this->*CreateNewHashEntry)(x, y, theta);
+	}
+	if (is_in_collision(OutHashEntry))
+	{
+		SBPL_ERROR("ERROR: start state in collision\n", x, y);
 	}
 
 	//need to recompute start heuristics?
@@ -451,6 +460,7 @@ EnvNAVXYTHETALATHashEntry_t* Environment_xyt_3d_collisions::CreateNewHashEntry_l
 
 	//insert into the tables
 	StateID2CoordTable.push_back(HashEntry);
+	stateIDs_in_collision.push_back(UNKNOWN);
 
 	int index = XYTHETA2INDEX(X, Y, Theta);
 
@@ -574,9 +584,6 @@ void Environment_xyt_3d_collisions::GetSuccs(int SourceStateID, vector<int>* Suc
 		int cost = GetActionCost(HashEntry->X, HashEntry->Y, HashEntry->Theta, nav3daction);
 		if (cost >= INFINITECOST)
 			continue;
-		// 3d collision check
-		if (is_in_collision(newX, newY, newTheta))
-			continue;
 
 		EnvNAVXYTHETALATHashEntry_t* OutHashEntry;
 		if ((OutHashEntry = (this->*GetHashEntry)(newX, newY, newTheta)) == NULL)
@@ -584,6 +591,9 @@ void Environment_xyt_3d_collisions::GetSuccs(int SourceStateID, vector<int>* Suc
 			//have to create a new entry
 			OutHashEntry = (this->*CreateNewHashEntry)(newX, newY, newTheta);
 		}
+		// 3d collision check
+		if (is_in_collision(OutHashEntry))
+			continue;
 
 		SuccIDV->push_back(OutHashEntry->stateID);
 		CostV->push_back(cost);
@@ -637,9 +647,6 @@ void Environment_xyt_3d_collisions::GetPreds(int TargetStateID, vector<int>* Pre
 		int cost = GetActionCost(predX, predY, predTheta, nav3daction);
 		if (cost >= INFINITECOST)
 			continue;
-		// 3d collision check
-		if (is_in_collision(predX, predY, predTheta))
-			continue;
 
 		EnvNAVXYTHETALATHashEntry_t* OutHashEntry;
 		if ((OutHashEntry = (this->*GetHashEntry)(predX, predY, predTheta)) == NULL)
@@ -647,6 +654,9 @@ void Environment_xyt_3d_collisions::GetPreds(int TargetStateID, vector<int>* Pre
 			//have to create a new entry
 			OutHashEntry = (this->*CreateNewHashEntry)(predX, predY, predTheta);
 		}
+		// 3d collision check
+		if (is_in_collision(OutHashEntry))
+			continue;
 
 		PredIDV->push_back(OutHashEntry->stateID);
 		CostV->push_back(cost);
@@ -698,12 +708,6 @@ void Environment_xyt_3d_collisions::SetAllActionsandAllOutcomes(CMDPSTATE* state
 		cost = GetActionCost(HashEntry->X, HashEntry->Y, HashEntry->Theta, nav3daction);
 		if (cost >= INFINITECOST)
 			continue;
-		// 3d collision check
-		if (is_in_collision(newX, newY, newTheta))
-			continue;
-
-		//add the action
-		CMDPACTION* action = state->AddAction(aind);
 
 #if TIME_DEBUG
 		clock_t currenttime = clock();
@@ -715,6 +719,12 @@ void Environment_xyt_3d_collisions::SetAllActionsandAllOutcomes(CMDPSTATE* state
 			//have to create a new entry
 			OutHashEntry = (this->*CreateNewHashEntry)(newX, newY, newTheta);
 		}
+		// 3d collision check
+		if (is_in_collision(OutHashEntry))
+			continue;
+
+		//add the action
+		CMDPACTION* action = state->AddAction(aind);
 		action->AddOutcome(OutHashEntry->stateID, cost, 1.0);
 
 #if TIME_DEBUG
@@ -1091,22 +1101,35 @@ sbpl_xy_theta_pt_t Environment_xyt_3d_collisions::discreteToContinuous(int x, in
 	return pose;
 }
 
-bool Environment_xyt_3d_collisions::is_in_collision(int X, int Y, int Theta)
+bool Environment_xyt_3d_collisions::is_in_collision(EnvNAVXYTHETALATHashEntry_t* state)
 {
-	// TODO: add cache
-	collision_detection::CollisionRequest request;
-	collision_detection::CollisionResult result;
-	sbpl_xy_theta_pt_t pose = discreteToContinuous(X, Y, Theta);
-	robot_state::RobotState& robot_state = scene->getCurrentStateNonConst();
-	robot_state.setVariablePosition("world_joint/x", pose.x);
-	robot_state.setVariablePosition("world_joint/y", pose.y);
-	robot_state.setVariablePosition("world_joint/theta", pose.theta);
-	scene->setCurrentState(robot_state);
-	scene->checkCollision(request, result);
-	return result.collision;
+	if (stateIDs_in_collision[state->stateID] == UNKNOWN)
+	{
+		collision_detection::CollisionRequest request;
+		collision_detection::CollisionResult result;
+		sbpl_xy_theta_pt_t pose = discreteToContinuous(state->X, state->Y, state->Theta);
+		robot_state::RobotState& robot_state = scene->getCurrentStateNonConst();
+		robot_state.setVariablePosition("world_joint/x", pose.x);
+		robot_state.setVariablePosition("world_joint/y", pose.y);
+		robot_state.setVariablePosition("world_joint/theta", pose.theta);
+		scene->setCurrentState(robot_state);
+		scene->checkCollision(request, result);
+		stateIDs_in_collision[state->stateID] = (result.collision ? IN_COLLISION : NO_COLLISION);
+	}
+	if (stateIDs_in_collision[state->stateID] ==  IN_COLLISION)
+		return true;
+	return false;
 }
 
-//void EnvironmentNAVXYTHETALAT::GetPreds(int TargetStateID, std::vector<int>* PredIDV, std::vector<int>* CostV, std::vector<bool>* isTrueCost);
-//void EnvironmentNAVXYTHETALAT::GetPredsWithUniqueIds(int TargetStateID, std::vector<int>* PredIDV, std::vector<int>* CostV);
-//void EnvironmentNAVXYTHETALAT::GetPredsWithUniqueIds(int TargetStateID, std::vector<int>* PredIDV, std::vector<int>* CostV, std::vector<bool>* isTrueCost);
+void Environment_xyt_3d_collisions::update_planning_scene()
+{
+	scene_monitor->requestPlanningSceneState("/get_planning_scene");
+	scene = scene_monitor->getPlanningScene();
+}
 
+void Environment_xyt_3d_collisions::publish_planning_scene()
+{
+	moveit_msgs::PlanningScene msg;
+	scene->getPlanningSceneMsg(msg);
+	planning_scene_publisher.publish(msg);
+}

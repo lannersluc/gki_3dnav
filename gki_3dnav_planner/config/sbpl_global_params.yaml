@@ -1,4 +1,4 @@
-SBPLLatticePlanner:
+GKI3dNavPlanner:
   environment_type: XYT_3dCollisions
   planner_type: ARAPlanner
   allocated_time: 5.0

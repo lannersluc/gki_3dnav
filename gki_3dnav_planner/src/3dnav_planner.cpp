@@ -123,16 +123,7 @@ void GKI3dNavPlanner::initialize(std::string name, costmap_2d::Costmap2DROS* cos
 
 		std::vector<geometry_msgs::Point> footprint = costmap_ros_->getRobotFootprint();
 
-		if ("XYT_3dCollisions" == environment_type_)
-		{
-			ROS_DEBUG("Using a 3D costmap for theta lattice\n");
-			env_ = new Environment_xyt_3d_collisions();
-		}
-		else
-		{
-			ROS_ERROR("XYThetaLattice is currently the only supported environment!\n");
-			exit(1);
-		}
+		env_ = new Environment_xyt_3d_collisions();
 
 		// check if the costmap has an inflation layer
 		// Warning: footprint updates after initialization are not supported here
@@ -264,6 +255,8 @@ bool GKI3dNavPlanner::makePlan(const geometry_msgs::PoseStamped& start, const ge
 	double theta_start = 2 * atan2(start.pose.orientation.z, start.pose.orientation.w);
 	double theta_goal = 2 * atan2(goal.pose.orientation.z, goal.pose.orientation.w);
 
+	env_->update_planning_scene();
+	env_->publish_planning_scene();
 	try
 	{
 		int ret = env_->SetStart(start.pose.position.x - costmap_ros_->getCostmap()->getOriginX(), start.pose.position.y - costmap_ros_->getCostmap()->getOriginY(), theta_start);
