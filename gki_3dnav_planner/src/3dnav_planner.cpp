@@ -255,6 +255,7 @@ bool GKI3dNavPlanner::makePlan(const geometry_msgs::PoseStamped& start, const ge
 	double theta_start = 2 * atan2(start.pose.orientation.z, start.pose.orientation.w);
 	double theta_goal = 2 * atan2(goal.pose.orientation.z, goal.pose.orientation.w);
 
+	env_->clear_full_body_collision_infos();
 	env_->update_planning_scene();
 	env_->publish_planning_scene();
 	try

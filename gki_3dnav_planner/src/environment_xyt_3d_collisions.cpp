@@ -76,6 +76,8 @@ Environment_xyt_3d_collisions::Environment_xyt_3d_collisions()
 	scene = scene_monitor->getPlanningScene();
 	ros::NodeHandle nh("~");
 	planning_scene_publisher = nh.advertise<moveit_msgs::PlanningScene>("planning_scene", 1, true);
+	nh.param("full_body_lethal_collision_distance", collision_distance_lethal, 0.05);
+	nh.param("full_body_irrelevant_collision_distance", collision_distance_irrelevant, 0.5);
 }
 
 Environment_xyt_3d_collisions::~Environment_xyt_3d_collisions()
@@ -299,7 +301,7 @@ int Environment_xyt_3d_collisions::SetGoal(double x_m, double y_m, double theta_
 		//have to create a new entry
 		OutHashEntry = (this->*CreateNewHashEntry)(x, y, theta);
 	}
-	if (is_in_collision(OutHashEntry))
+	if (in_full_body_collision(OutHashEntry))
 	{
 		SBPL_ERROR("ERROR: goal state in collision\n", x, y);
 	}
@@ -346,7 +348,7 @@ int Environment_xyt_3d_collisions::SetStart(double x_m, double y_m, double theta
 		//have to create a new entry
 		OutHashEntry = (this->*CreateNewHashEntry)(x, y, theta);
 	}
-	if (is_in_collision(OutHashEntry))
+	if (in_full_body_collision(OutHashEntry))
 	{
 		SBPL_ERROR("ERROR: start state in collision\n", x, y);
 	}
@@ -460,7 +462,7 @@ EnvNAVXYTHETALATHashEntry_t* Environment_xyt_3d_collisions::CreateNewHashEntry_l
 
 	//insert into the tables
 	StateID2CoordTable.push_back(HashEntry);
-	stateIDs_in_collision.push_back(UNKNOWN);
+	full_body_collision_infos.push_back(FullBodyCollisionInfo());
 
 	int index = XYTHETA2INDEX(X, Y, Theta);
 
@@ -514,6 +516,7 @@ EnvNAVXYTHETALATHashEntry_t* Environment_xyt_3d_collisions::CreateNewHashEntry_h
 
 	//insert into the tables
 	StateID2CoordTable.push_back(HashEntry);
+	full_body_collision_infos.push_back(FullBodyCollisionInfo());
 
 	//get the hash table bin
 	i = GETHASHBIN(HashEntry->X, HashEntry->Y, HashEntry->Theta);
@@ -592,8 +595,11 @@ void Environment_xyt_3d_collisions::GetSuccs(int SourceStateID, vector<int>* Suc
 			OutHashEntry = (this->*CreateNewHashEntry)(newX, newY, newTheta);
 		}
 		// 3d collision check
-		if (is_in_collision(OutHashEntry))
+		if (in_full_body_collision(OutHashEntry))
 			continue;
+//		cost += get_full_body_cost_penalty(OutHashEntry);
+//		if (cost >= INFINITECOST)
+//			continue;
 
 		SuccIDV->push_back(OutHashEntry->stateID);
 		CostV->push_back(cost);
@@ -655,8 +661,11 @@ void Environment_xyt_3d_collisions::GetPreds(int TargetStateID, vector<int>* Pre
 			OutHashEntry = (this->*CreateNewHashEntry)(predX, predY, predTheta);
 		}
 		// 3d collision check
-		if (is_in_collision(OutHashEntry))
+		if (in_full_body_collision(OutHashEntry))
 			continue;
+//		cost += get_full_body_cost_penalty(OutHashEntry);
+//		if (cost >= INFINITECOST)
+//			continue;
 
 		PredIDV->push_back(OutHashEntry->stateID);
 		CostV->push_back(cost);
@@ -720,8 +729,11 @@ void Environment_xyt_3d_collisions::SetAllActionsandAllOutcomes(CMDPSTATE* state
 			OutHashEntry = (this->*CreateNewHashEntry)(newX, newY, newTheta);
 		}
 		// 3d collision check
-		if (is_in_collision(OutHashEntry))
+		if (in_full_body_collision(OutHashEntry))
 			continue;
+//		cost += get_full_body_cost_penalty(OutHashEntry);
+//		if (cost >= INFINITECOST)
+//			continue;
 
 		//add the action
 		CMDPACTION* action = state->AddAction(aind);
@@ -1101,11 +1113,25 @@ sbpl_xy_theta_pt_t Environment_xyt_3d_collisions::discreteToContinuous(int x, in
 	return pose;
 }
 
-bool Environment_xyt_3d_collisions::is_in_collision(EnvNAVXYTHETALATHashEntry_t* state)
+
+bool Environment_xyt_3d_collisions::in_full_body_collision(EnvNAVXYTHETALATHashEntry_t* state)
 {
-	if (stateIDs_in_collision[state->stateID] == UNKNOWN)
+	return get_full_body_collision_info(state).collision;
+}
+
+int Environment_xyt_3d_collisions::get_full_body_cost_penalty(EnvNAVXYTHETALATHashEntry_t* state)
+{
+	return get_full_body_collision_info(state).penalty;
+}
+
+const Environment_xyt_3d_collisions::FullBodyCollisionInfo& Environment_xyt_3d_collisions::get_full_body_collision_info(EnvNAVXYTHETALATHashEntry_t* state)
+{
+	ROS_ASSERT_MSG(full_body_collision_infos.size() > state->stateID, "full_body_collision: state_id mismatch!");
+	if (! full_body_collision_infos[state->stateID].initialized)
 	{
 		collision_detection::CollisionRequest request;
+		//request.distance = true;
+		//request.cost = true;
 		collision_detection::CollisionResult result;
 		sbpl_xy_theta_pt_t pose = discreteToContinuous(state->X, state->Y, state->Theta);
 		robot_state::RobotState& robot_state = scene->getCurrentStateNonConst();
@@ -1114,11 +1140,24 @@ bool Environment_xyt_3d_collisions::is_in_collision(EnvNAVXYTHETALATHashEntry_t*
 		robot_state.setVariablePosition("world_joint/theta", pose.theta);
 		scene->setCurrentState(robot_state);
 		scene->checkCollision(request, result);
-		stateIDs_in_collision[state->stateID] = (result.collision ? IN_COLLISION : NO_COLLISION);
+		full_body_collision_infos[state->stateID].initialized = true;
+		full_body_collision_infos[state->stateID].collision = result.collision;
+		//full_body_collision_infos[state->stateID].distance = result.distance;
+		//full_body_collision_infos[state->stateID].penalty = compute_full_body_cost_penalty(result.distance);
 	}
-	if (stateIDs_in_collision[state->stateID] ==  IN_COLLISION)
-		return true;
-	return false;
+	return full_body_collision_infos[state->stateID];
+}
+
+int Environment_xyt_3d_collisions::compute_full_body_cost_penalty(double distance)
+{
+	// > irrelevant: 0
+	if (distance > collision_distance_irrelevant)
+		return 0;
+	// < lethal: infinitecost
+	if (distance < collision_distance_lethal)
+		return INFINITECOST;
+	// 1/distance in mm
+	return 1000.0 / distance;
 }
 
 void Environment_xyt_3d_collisions::update_planning_scene()
@@ -1133,3 +1172,12 @@ void Environment_xyt_3d_collisions::publish_planning_scene()
 	scene->getPlanningSceneMsg(msg);
 	planning_scene_publisher.publish(msg);
 }
+
+void Environment_xyt_3d_collisions::clear_full_body_collision_infos()
+{
+	for (size_t i = 0; i < full_body_collision_infos.size(); i++)
+	{
+		full_body_collision_infos[i].initialized = false;
+	}
+}
+
